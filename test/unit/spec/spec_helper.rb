@@ -5,6 +5,10 @@ require 'chefspec/berkshelf'
 require 'chef/application'
 require 'json'
 
+RSpec.configure do |config|
+  config.extend(ChefSpec::Cacher)
+end
+
 Dir['./test/unit/spec/support/**/*.rb'].sort.each { |f| require f }
 
 ::LOG_LEVEL = :fatal
@@ -18,6 +22,7 @@ Dir['./test/unit/spec/support/**/*.rb'].sort.each { |f| require f }
 
 # rubocop:disable AbcSize
 def node_resources(node)
+  raise 'Spec Helper was passed a ni/false node object' unless node
   # Setup databag
   env = Chef::Environment.new
   env.name 'demo'
@@ -104,3 +109,40 @@ end
 # rubocop:enable AbcSize
 
 at_exit { ChefSpec::Coverage.report! }
+
+module RackspaceChefSpec
+  module SpecHelper
+
+    def memoized_runner(options={})
+      platform = options['platform']
+      version = options['version']
+
+      # inflate the platform key so we can check for a version
+      @@runner = {} if @@runner.nil?
+      @@runner[platform] = {} if @@runner[platform].nil?
+
+      unless @@runner[platform][version]
+        puts "new serverrunner #{platform}#{version}"
+        @@runner[platform][version] = ChefSpec::ServerRunner.new(options) do |node, server|
+          yield node, server if block_given?
+        end
+      end
+      @@runner[platform][version]
+    end
+
+  end
+end
+
+# give a way to clean out / kill off the node data from a previous run
+module ChefSpec
+  class SoloRunner
+    def clean_node
+      @node = nil
+      self.node
+    end
+  end
+end
+
+RSpec.configure do |config|
+  config.include RackspaceChefSpec::SpecHelper
+end

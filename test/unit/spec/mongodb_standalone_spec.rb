@@ -4,26 +4,32 @@ require_relative 'spec_helper'
 
 describe 'nodestack::mongodb_standalone' do
   before { stub_resources }
-  supported_platforms.each do |platform, versions|
-    versions.each do |version|
-      context "on #{platform.capitalize} #{version}" do
-        let(:chef_run) do
-          ChefSpec::Runner.new(platform: platform, version: version) do |node|
-            node_resources(node)
-          end.converge(described_recipe)
-        end
 
-        recipes = %w(
+  platform = 'ubuntu'
+  version = '12.04'
+
+  cached('runner') do
+    ChefSpec::ServerRunner.new(platform: platform, version: version, log_level: LOG_LEVEL) do |node, server|
+      # memoized_runner(platform: platform, version: version, log_level: LOG_LEVEL) do |node, server|
+      node_resources(node)
+    end
+  end
+
+  recipes = %w(
           mongodb::10gen_repo
           mongodb::default
-        )
+  )
 
-        it 'includes recipes' do
-          recipes.each do |recipe|
-            expect(chef_run).to include_recipe(recipe)
-          end
-        end
-      end
+  let(:chef_run) do
+    node_resources(runner.clean_node)
+    recipes.each do |recipe|
+      runner.converge(recipe)
+    end
+  end
+
+  it 'includes recipes' do
+    recipes.each do |recipe|
+      expect(chef_run).to include_recipe(recipe)
     end
   end
 end
